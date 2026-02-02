@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisation Des Tournées - SAE2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        #canvas-container { position: relative; width: 100%; height: 600px; background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; }
+        .node-label { position: absolute; pointer-events: none; font-size: 12px; font-weight: bold; color: #374151; transform: translate(-50%, -150%); text-shadow: 0 1px 2px white; }
+        .tooltip { position: absolute; background: rgba(0,0,0,0.8); color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Optimisation des Tournées (CVRP)</h1>
+            <p class="text-gray-600 mt-2">Visualisation de la solution optimale pour 10 cantines</p>
+            <div class="mt-4 flex gap-4 text-sm">
+                <div class="px-3 py-1 bg-green-100 text-green-800 rounded-full">Distance Totale: 31.3</div>
+                <div class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">3 Véhicules</div>
+                <div class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full">10 Cantines</div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="lg:col-span-3">
+                <div id="canvas-container">
+                    <canvas id="graphCanvas"></canvas>
+                    <div id="tooltip" class="tooltip"></div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm h-fit">
+                <h2 class="font-bold text-gray-800 mb-4">Détail des Tournées</h2>
+                <div class="space-y-4">
+                    <div class="p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                        <div class="font-bold text-red-700">Véhicule 1</div>
+                        <div class="text-sm text-red-600 mt-1">Dépôt → C5 → C9 → C8 → C2 → Dépôt</div>
+                    </div>
+                    <div class="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                        <div class="font-bold text-blue-700">Véhicule 3</div>
+                        <div class="text-sm text-blue-600 mt-1">Dépôt → C3 → C1 → C10 → Dépôt</div>
+                    </div>
+                    <div class="p-3 bg-green-50 border-l-4 border-green-500 rounded">
+                        <div class="font-bold text-green-700">Véhicule 4</div>
+                        <div class="text-sm text-green-600 mt-1">Dépôt → C6 → C4 → C7 → Dépôt</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Données
+        const nodes = [
+            { id: 0, label: "Dépôt", type: "depot", demand: 0 },
+            { id: 1, label: "C1", type: "client", demand: 60 },
+            { id: 2, label: "C2", type: "client", demand: 18 },
+            { id: 3, label: "C3", type: "client", demand: 26 },
+            { id: 4, label: "C4", type: "client", demand: 15 },
+            { id: 5, label: "C5", type: "client", demand: 44 },
+            { id: 6, label: "C6", type: "client", demand: 32 },
+            { id: 7, label: "C7", type: "client", demand: 20 },
+            { id: 8, label: "C8", type: "client", demand: 10 },
+            { id: 9, label: "C9", type: "client", demand: 27 },
+            { id: 10, label: "C10", type: "client", demand: 11 }
+        ];
+
+        const distanceMatrix = [
+            [0, 2.7, 4.6, 2.8, 3, 3.3, 3.1, 2.7, 5.1, 3.9, 4.7],
+            [2.7, 0, 3.1, 0.8, 1.8, 2.5, 4.2, 1.4, 3.6, 2.5, 3],
+            [4.6, 3.1, 0, 3.3, 4.4, 1.7, 6.8, 4.1, 1.3, 1.7, 1.4],
+            [2.8, 0.8, 3.3, 0, 1.9, 2, 4, 1.5, 3.8, 2.8, 3.2],
+            [3, 1.8, 4.4, 1.9, 0, 3.4, 2.6, 0.5, 4.7, 4.7, 4.1],
+            [3.3, 2.5, 1.7, 2, 3.4, 0, 5.8, 3, 1.8, 0.5, 2.6],
+            [3.1, 4.2, 6.8, 4, 2.6, 5.8, 0, 3, 7.4, 6.1, 7.6],
+            [2.7, 1.4, 4.1, 1.5, 0.5, 3, 3, 0, 4.6, 3.7, 4.3],
+            [5.1, 3.6, 1.3, 3.8, 4.7, 1.8, 7.4, 4.6, 0, 1.4, 2.8],
+            [3.9, 2.5, 1.7, 2.8, 4.7, 0.5, 6.1, 3.7, 1.4, 0, 2.8],
+            [4.7, 3, 1.4, 3.2, 4.1, 2.6, 7.6, 4.3, 2.8, 2.8, 0]
+        ];
+
+        const routes = [
+            { id: 1, path: [0, 5, 9, 8, 2, 0], color: "#EF4444" },
+            { id: 3, path: [0, 3, 1, 10, 0], color: "#3B82F6" },
+            { id: 4, path: [0, 6, 4, 7, 0], color: "#10B981" }
+        ];
+
+        // Simulation de forces pour placer les noeuds (MDS approximatif)
+        // Initialisation aléatoire
+        const width = 800;
+        const height = 600;
+        nodes.forEach(n => {
+            n.x = Math.random() * width;
+            n.y = Math.random() * height;
+            n.vx = 0;
+            n.vy = 0;
+        });
+        
+        // Fixer le dépôt au centre
+        nodes[0].x = width / 2;
+        nodes[0].y = height / 2;
+        nodes[0].fixed = true;
+
+        // Simulation
+        for(let iter=0; iter<3000; iter++) {
+            nodes.forEach((n, i) => {
+                if(n.fixed) return;
+                let fx = 0, fy = 0;
+                
+                // Forces de ressort basée sur la distance cible
+                nodes.forEach((m, j) => {
+                    if(i === j) return;
+                    const dx = n.x - m.x;
+                    const dy = n.y - m.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                    
+                    const targetDist = distanceMatrix[i][j] * 60; // Scale factor
+                    const force = (dist - targetDist) * 0.01;
+                    
+                    fx -= (dx/dist) * force;
+                    fy -= (dy/dist) * force;
+                });
+                
+                n.vx = (n.vx * 0.9) + fx;
+                n.vy = (n.vy * 0.9) + fy;
+                n.x += n.vx;
+                n.y += n.vy;
+            });
+        }
+
+        // Dessin
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function draw() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            ctx.clearRect(0, 0, rect.width, rect.height);
+            
+            const scaleX = rect.width / width;
+            const scaleY = rect.height / height;
+            const offsetX = (rect.width - width * scaleX) / 2;
+            const offsetY = (rect.height - height * scaleY) / 2;
+
+            function mapX(x) { return x * scaleX * 0.8 + rect.width * 0.1; }
+            function mapY(y) { return y * scaleY * 0.8 + rect.height * 0.1; }
+
+            // Dessiner les routes
+            routes.forEach(route => {
+                ctx.beginPath();
+                ctx.strokeStyle = route.color;
+                ctx.lineWidth = 3;
+                ctx.lineJoin = 'round';
+                
+                route.path.forEach((nodeId, idx) => {
+                    const n = nodes[nodeId];
+                    const x = mapX(n.x);
+                    const y = mapY(n.y);
+                    if(idx === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                
+                // Flèches
+                route.path.forEach((nodeId, idx) => {
+                    if(idx >= route.path.length - 1) return;
+                    const n1 = nodes[nodeId];
+                    const n2 = nodes[route.path[idx+1]];
+                    const x1 = mapX(n1.x), y1 = mapY(n1.y);
+                    const x2 = mapX(n2.x), y2 = mapY(n2.y);
+                    
+                    const angle = Math.atan2(y2-y1, x2-x1);
+                    const midX = (x1+x2)/2;
+                    const midY = (y1+y2)/2;
+                    
+                    ctx.beginPath();
+                    ctx.fillStyle = route.color;
+                    ctx.moveTo(midX, midY);
+                    ctx.lineTo(midX - 10 * Math.cos(angle - Math.PI/6), midY - 10 * Math.sin(angle - Math.PI/6));
+                    ctx.lineTo(midX - 10 * Math.cos(angle + Math.PI/6), midY - 10 * Math.sin(angle + Math.PI/6));
+                    ctx.fill();
+                });
+            });
+
+            // Dessiner les noeuds
+            nodes.forEach(n => {
+                const x = mapX(n.x);
+                const y = mapY(n.y);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, n.type === 'depot' ? 15 : 10 + n.demand/10, 0, Math.PI * 2);
+                ctx.fillStyle = n.type === 'depot' ? '#1F2937' : '#F59E0B';
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.fillStyle = '#374151';
+                ctx.font = 'bold 12px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(n.label, x, y - 20);
+                if(n.demand > 0) {
+                    ctx.font = '10px Inter';
+                    ctx.fillStyle = '#6B7280';
+                    ctx.fillText(`(${n.demand})`, x, y - 8);
+                }
+            });
+        }
+        
+        draw();
+    </script>
+</body>
+</html>

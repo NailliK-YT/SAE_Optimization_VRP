@@ -1,0 +1,14 @@
+// Solution optimale trouvée
+// Objectif : Minimiser la distance totale
+// Valeur : 31.3
+
+Tournées formées :
+
+Véhicule 1 : Dépôt -> C5 -> C9 -> C8 -> C2 -> Dépôt
+Véhicule 3 : Dépôt -> C3 -> C1 -> C10 -> Dépôt
+Véhicule 4 : Dépôt -> C6 -> C4 -> C7 -> Dépôt
+
+// Analyse :
+// - 3 véhicules utilisés sur 4 disponibles
+// - Distance totale : 31.3 unités
+// - Tous les clients (10/10) sont visités
