@@ -1,3 +1,21 @@
-__pycache__/ 
-*.pyc 
-venv/ 
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# CPLEX
+*.lp
+*.sol
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
