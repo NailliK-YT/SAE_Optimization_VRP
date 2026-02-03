@@ -58,10 +58,10 @@ execute {
                 for(var nextNode in Sommets) {
                     if(x[current][nextNode][v] == 1) {
                         if(nextNode == 0) {
-                            write(" → Depot");
+                            write("-> Depot");
                             tourTerminated = true;
                         } else {
-                            write(" → C" + nextNode);
+                            write(" -> C" + nextNode);
                             current = nextNode;
                         }
                         break;
