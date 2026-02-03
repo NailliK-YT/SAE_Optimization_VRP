@@ -153,39 +153,75 @@
             { id: 4, path: [0, 6, 4, 7, 0], color: "#10B981" }
         ];
 
-        // --- Simulation de mise en page (MDS simplifié) ---
-        const width = 2000; // Grand espace virtuel
+        // --- Configuration Physique ---
+        const SCALING_FACTOR = 180;
+        const width = 2000;
         const height = 2000;
+
+        // Initialisation aléatoire
         nodes.forEach(n => {
             n.x = Math.random() * width;
             n.y = Math.random() * height;
-            n.vx = 0;
-            n.vy = 0;
+            n.vx = 0; n.vy = 0;
+            n.fixed = false;
         });
 
+        // Setup initial (Dépôt au centre)
         nodes[0].x = width / 2;
         nodes[0].y = height / 2;
-        nodes[0].fixed = true;
+        nodes[0].fixed = true; // Fixe sauf si draggué
 
-        for (let iter = 0; iter < 3000; iter++) {
+        // --- Moteur Physique Continu ---
+        let isPhysicActive = true;
+
+        function updatePhysics() {
+            // Paramètres de simulation
+            const friction = 0.2; // Très fort amortissement (le mouvement s'arrête vite)
+            const strength = 0.2; // Ressorts rigides
+            const maxVel = 50;   // Limite de vitesse pour éviter les explosions
+
+            let totalEnergy = 0;
+
             nodes.forEach((n, i) => {
-                if (n.fixed) return;
+                if (n.fixed && n !== viewState.draggedNode) return;
+                if (n === viewState.draggedNode) return;
+
                 let fx = 0, fy = 0;
+
                 nodes.forEach((m, j) => {
                     if (i === j) return;
                     const dx = n.x - m.x;
                     const dy = n.y - m.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const targetDist = distanceMatrix[i][j] * 180; // Scale factor 180
-                    const force = (dist - targetDist) * 0.01;
-                    fx -= (dx / dist) * force;
-                    fy -= (dy / dist) * force;
+                    const currentDist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+                    const targetDist = distanceMatrix[i][j] * SCALING_FACTOR;
+
+                    const delta = currentDist - targetDist;
+                    const force = delta * strength;
+
+                    fx -= (dx / currentDist) * force;
+                    fy -= (dy / currentDist) * force;
                 });
-                n.vx = (n.vx * 0.9) + fx;
-                n.vy = (n.vy * 0.9) + fy;
+
+                n.vx = (n.vx * friction) + fx;
+                n.vy = (n.vy * friction) + fy;
+
+                // Limite de vitesse (Capstone)
+                const v = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+                if (v > maxVel) {
+                    n.vx = (n.vx / v) * maxVel;
+                    n.vy = (n.vy / v) * maxVel;
+                }
+
                 n.x += n.vx;
                 n.y += n.vy;
+
+                totalEnergy += v;
             });
+
+            // Mise en veille si tout est calme
+            if (activeInteraction === false && totalEnergy < 0.5) {
+                isPhysicActive = false;
+            }
         }
 
         // --- Gestion Canvas / Zoom / Pan ---
@@ -194,84 +230,149 @@
         const container = document.getElementById('canvas-container');
 
         let viewState = {
-            scale: 0.3, // Zoom initial dézoomé pour tout voir
+            scale: 0.3,
             offsetX: 0,
             offsetY: 0,
-            isDragging: false,
-            lastX: 0,
-            lastY: 0
+            isDraggingMap: false,
+            bgDragStartX: 0,
+            bgDragStartY: 0,
+            draggedNode: null,
+            isNodeDragging: false
         };
 
         function resize() {
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
-            draw();
+            isPhysicActive = true; // Force redraw
         }
         window.addEventListener('resize', resize);
 
-        // Initial centering
         function resetView() {
             viewState.scale = 0.3;
             viewState.offsetX = canvas.width / 2 - (width / 2) * viewState.scale;
             viewState.offsetY = canvas.height / 2 - (height / 2) * viewState.scale;
-            draw();
+            isPhysicActive = true; // Force redraw
         }
 
         function adjustZoom(factor) {
             const newScale = viewState.scale * factor;
-            // Zoom vers le centre
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
-
             viewState.offsetX = centerX - (centerX - viewState.offsetX) * (newScale / viewState.scale);
             viewState.offsetY = centerY - (centerY - viewState.offsetY) * (newScale / viewState.scale);
             viewState.scale = newScale;
-            draw();
+            isPhysicActive = true; // Force redraw
         }
 
-        // Mouse Events
+        // --- Systèmes de Coordonnées ---
+        function screenToWorld(sx, sy) {
+            return {
+                x: (sx - viewState.offsetX) / viewState.scale,
+                y: (sy - viewState.offsetY) / viewState.scale
+            };
+        }
+
+        function worldToScreen(wx, wy) {
+            return {
+                x: wx * viewState.scale + viewState.offsetX,
+                y: wy * viewState.scale + viewState.offsetY
+            };
+        }
+
+        function getNodeAt(x, y) {
+            const mouseWorld = screenToWorld(x, y);
+            let found = null;
+            // Rayon de sélection un peu large pour faciliter le clic
+            const hitRadius = 30 / viewState.scale;
+
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const n = nodes[i];
+                const dx = n.x - mouseWorld.x;
+                const dy = n.y - mouseWorld.y;
+                if (Math.sqrt(dx * dx + dy * dy) < hitRadius) {
+                    found = n;
+                    break;
+                }
+            }
+            return found;
+        }
+
+        // --- Interactions Souris ---
+        let activeInteraction = false;
+
         container.addEventListener('mousedown', e => {
-            viewState.isDragging = true;
-            viewState.lastX = e.clientX;
-            viewState.lastY = e.clientY;
-        });
-
-        window.addEventListener('mousemove', e => {
-            if (!viewState.isDragging) return;
-            const dx = e.clientX - viewState.lastX;
-            const dy = e.clientY - viewState.lastY;
-            viewState.offsetX += dx;
-            viewState.offsetY += dy;
-            viewState.lastX = e.clientX;
-            viewState.lastY = e.clientY;
-            draw();
-        });
-
-        window.addEventListener('mouseup', () => viewState.isDragging = false);
-
-        container.addEventListener('wheel', e => {
-            e.preventDefault();
-            const factor = e.deltaY > 0 ? 0.95 : 1.05;
-
-            // Zoom vers la souris
+            activeInteraction = true;
+            isPhysicActive = true; // Réveil physique
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
+            const node = getNodeAt(mouseX, mouseY);
+
+            if (node) {
+                viewState.isNodeDragging = true;
+                viewState.draggedNode = node;
+                // On "réveille" la physique si tout s'était arrêté
+                node.vx = 0;
+                node.vy = 0;
+                container.style.cursor = 'grabbing';
+            } else {
+                viewState.isDraggingMap = true;
+                viewState.bgDragStartX = e.clientX;
+                viewState.bgDragStartY = e.clientY;
+                container.style.cursor = 'move';
+            }
+        });
+
+        window.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (viewState.isNodeDragging && viewState.draggedNode) {
+                const wPos = screenToWorld(mouseX, mouseY);
+                // On met à jour la position directement (override physics)
+                viewState.draggedNode.x = wPos.x;
+                viewState.draggedNode.y = wPos.y;
+            } else if (viewState.isDraggingMap) {
+                const dx = e.clientX - viewState.bgDragStartX;
+                const dy = e.clientY - viewState.bgDragStartY;
+                viewState.offsetX += dx;
+                viewState.offsetY += dy;
+                viewState.bgDragStartX = e.clientX;
+                viewState.bgDragStartY = e.clientY;
+            } else {
+                const node = getNodeAt(mouseX, mouseY);
+                container.style.cursor = node ? 'grab' : 'default';
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            activeInteraction = false;
+            if (viewState.draggedNode) {
+                // Optionnel: figer le noeud après déplacement ? 
+                // Pour l'instant on le laisse libre mais avec inertie nulle
+                viewState.draggedNode.vx = 0;
+                viewState.draggedNode.vy = 0;
+            }
+            viewState.isNodeDragging = false;
+            viewState.draggedNode = null;
+            viewState.isDraggingMap = false;
+            container.style.cursor = 'default';
+        });
+
+        container.addEventListener('wheel', e => {
+            e.preventDefault();
+            const factor = e.deltaY > 0 ? 0.95 : 1.05;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
             const newScale = viewState.scale * factor;
             viewState.offsetX = mouseX - (mouseX - viewState.offsetX) * (newScale / viewState.scale);
             viewState.offsetY = mouseY - (mouseY - viewState.offsetY) * (newScale / viewState.scale);
             viewState.scale = newScale;
-
-            draw();
+            isPhysicActive = true; // Force redraw on zoom
         });
-
-        function worldToScreen(x, y) {
-            return {
-                x: x * viewState.scale + viewState.offsetX,
-                y: y * viewState.scale + viewState.offsetY
-            };
-        }
 
         function drawGrid() {
             const gridSize = 100 * viewState.scale;
@@ -282,30 +383,41 @@
             ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 1;
 
-            for (let x = offsetX; x < canvas.width; x += gridSize) {
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
+            if (gridSize > 5) { // Éviter de dessiner une grille trop dense
+                for (let x = offsetX; x < canvas.width; x += gridSize) {
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                }
+                for (let y = offsetY; y < canvas.height; y += gridSize) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                }
+                ctx.stroke();
             }
-            for (let y = offsetY; y < canvas.height; y += gridSize) {
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-            }
-            ctx.stroke();
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawGrid();
+        // --- Boucle de Rendu (Game Loop) ---
+        function loop() {
+            if (isPhysicActive || activeInteraction) {
+                updatePhysics();
+                // Draw only if physics is active or user is interacting
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawGrid();
 
-            // Routes
+                // ... (Draw Routes & Nodes - same as before, simplified for diff clarity essentially calling a draw function would be cleaner but keeping inline for stability)
+                drawScene();
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function drawScene() {
+            // Routes & Labels
             routes.forEach(route => {
-                ctx.beginPath();
                 ctx.strokeStyle = route.color;
-                ctx.lineWidth = 3; // Fixed line width independent of zoom? Or scaled? Fixed is usually better readable.
-                // Scaled line width can be clearer:
-                // ctx.lineWidth = 3 * viewState.scale; 
+                ctx.lineWidth = 3;
                 ctx.lineJoin = 'round';
 
+                ctx.beginPath();
                 route.path.forEach((nodeId, idx) => {
                     const n = nodes[nodeId];
                     const pos = worldToScreen(n.x, n.y);
@@ -314,11 +426,11 @@
                 });
                 ctx.stroke();
 
-                // Arrows
                 route.path.forEach((nodeId, idx) => {
                     if (idx >= route.path.length - 1) return;
+                    const nextId = route.path[idx + 1];
                     const n1 = nodes[nodeId];
-                    const n2 = nodes[route.path[idx + 1]];
+                    const n2 = nodes[nextId];
                     const p1 = worldToScreen(n1.x, n1.y);
                     const p2 = worldToScreen(n2.x, n2.y);
 
@@ -326,22 +438,48 @@
                     const midX = (p1.x + p2.x) / 2;
                     const midY = (p1.y + p2.y) / 2;
 
-                    const arrowSize = 10; // Fixed size arrows
+                    const screenDist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+
+                    // On dessine toujours la flèche et l'étiquette
+                    const arrowSize = 10;
                     ctx.beginPath();
                     ctx.fillStyle = route.color;
                     ctx.moveTo(midX, midY);
                     ctx.lineTo(midX - arrowSize * Math.cos(angle - Math.PI / 6), midY - arrowSize * Math.sin(angle - Math.PI / 6));
                     ctx.lineTo(midX - arrowSize * Math.cos(angle + Math.PI / 6), midY - arrowSize * Math.sin(angle + Math.PI / 6));
                     ctx.fill();
+
+                    // Distance Tag
+                    const distVal = distanceMatrix[nodeId][nextId];
+                    ctx.save();
+                    ctx.translate(midX, midY);
+                    // Keep text upright
+                    if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+                        ctx.rotate(angle + Math.PI);
+                    } else {
+                        ctx.rotate(angle);
+                    }
+                    ctx.translate(0, -12); // Move above line
+
+                    // Background for text
+                    const text = `${distVal}`;
+                    ctx.font = 'bold 11px Inter';
+                    const textWidth = ctx.measureText(text).width;
+
+                    ctx.fillStyle = 'white';
+                    ctx.roundRect(-textWidth / 2 - 2, -10, textWidth + 4, 14, 2);
+                    ctx.fill();
+                    ctx.fillStyle = route.color;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(text, 0, 0);
+                    ctx.restore();
                 });
             });
 
             // Nodes
             nodes.forEach(n => {
                 const pos = worldToScreen(n.x, n.y);
-
-                // Culling simpliste
-                if (pos.x < -50 || pos.x > canvas.width + 50 || pos.y < -50 || pos.y > canvas.height + 50) return;
+                if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -100 || pos.y > canvas.height + 100) return;
 
                 ctx.beginPath();
                 const radius = n.type === 'depot' ? 15 : 10 + n.demand / 10;
@@ -349,28 +487,38 @@
                 ctx.fillStyle = n.type === 'depot' ? '#1F2937' : '#F59E0B';
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 2;
+                if (viewState.draggedNode === n) {
+                    ctx.strokeStyle = '#3B82F6';
+                    ctx.lineWidth = 3;
+                }
                 ctx.fill();
                 ctx.stroke();
 
-                // Labels need to handle zoom too?
-                // Keeping text size somewhat constant or blocking very small scale
                 if (viewState.scale > 0.1) {
-                    ctx.fillStyle = '#374151';
-                    ctx.font = 'bold 12px Inter';
+                    // Label inside the node
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 10px Inter';
                     ctx.textAlign = 'center';
-                    ctx.fillText(n.label, pos.x, pos.y - 20);
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(n.label, pos.x, pos.y);
+
+                    // Reset textBaseline
+                    ctx.textBaseline = 'alphabetic';
+
+                    // Demand below the node
                     if (n.demand > 0) {
                         ctx.font = '10px Inter';
                         ctx.fillStyle = '#6B7280';
-                        ctx.fillText(`(${n.demand})`, pos.x, pos.y - 8);
+                        ctx.fillText(`(${n.demand})`, pos.x, pos.y + radius + 12);
                     }
                 }
             });
         }
 
-        // Initial setup
-        resize(); // sets width/height
-        resetView(); // sets initial offsets to center
+        // Boot
+        resize();
+        resetView();
+        requestAnimationFrame(loop); // Start loop immediately
     </script>
 </body>
 
