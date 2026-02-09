@@ -27,7 +27,7 @@ subject to {
     forall(j in Cantines)
         sum(v in Vehicules, i in Sommets : i != j) x[i][j][v] == 1;
 
-    // 2. Conservation du flot : depart et retour au depot [cite: 51]
+    // 2. Conservation du flot : depart et retour au depot [cite: 51]   
     forall(v in Vehicules, p in Sommets)
         sum(i in Sommets : i != p) x[i][p][v] - sum(j in Sommets : j != p) x[p][j][v] == 0;
 
