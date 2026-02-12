@@ -1,9 +1,10 @@
 package metier;
 
 /**
- * Donnees du probleme VRP (clients, distances, demandes, coordonnees)
+ * Donnees du probleme VRP : clients, vehicules, distances, demandes.
  */
 public class DonneesVRP {
+
     private int nbClients;
     private int nbVehicules;
     private int capaciteVehicule;
@@ -13,7 +14,8 @@ public class DonneesVRP {
     private double[] xCoords;
     private double[] yCoords;
 
-    // Getters
+    // --- Getters ---
+
     public int getNbClients() {
         return nbClients;
     }
@@ -46,44 +48,44 @@ public class DonneesVRP {
         return yCoords;
     }
 
-    // Setters
-    public void setNbClients(int nbClients) {
-        this.nbClients = nbClients;
+    // --- Setters ---
+
+    public void setNbClients(int n) {
+        this.nbClients = n;
     }
 
-    public void setNbVehicules(int nbVehicules) {
-        this.nbVehicules = nbVehicules;
+    public void setNbVehicules(int n) {
+        this.nbVehicules = n;
     }
 
-    public void setCapaciteVehicule(int capaciteVehicule) {
-        this.capaciteVehicule = capaciteVehicule;
+    public void setCapaciteVehicule(int c) {
+        this.capaciteVehicule = c;
     }
 
-    public void setDistanceMatrix(double[][] distanceMatrix) {
-        this.distanceMatrix = distanceMatrix;
+    public void setDistanceMatrix(double[][] m) {
+        this.distanceMatrix = m;
     }
 
-    public void setDemandes(int[] demandes) {
-        this.demandes = demandes;
+    public void setDemandes(int[] d) {
+        this.demandes = d;
     }
 
-    public void setXCoords(double[] xCoords) {
-        this.xCoords = xCoords;
+    public void setXCoords(double[] x) {
+        this.xCoords = x;
     }
 
-    public void setYCoords(double[] yCoords) {
-        this.yCoords = yCoords;
+    public void setYCoords(double[] y) {
+        this.yCoords = y;
     }
 
     /**
-     * Calcule la matrice des distances euclidiennes
+     * Calcule la matrice des distances euclidiennes a partir des coordonnees.
      */
     public void calculerDistancesEuclidiennes() {
-        int taille = nbClients + 1;
-        distanceMatrix = new double[taille][taille];
-
-        for (int i = 0; i < taille; i++) {
-            for (int j = 0; j < taille; j++) {
+        int n = nbClients + 1;
+        distanceMatrix = new double[n][n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
                 double dx = xCoords[i] - xCoords[j];
                 double dy = yCoords[i] - yCoords[j];
                 distanceMatrix[i][j] = Math.sqrt(dx * dx + dy * dy);
@@ -92,7 +94,7 @@ public class DonneesVRP {
     }
 
     /**
-     * Affiche les donnees chargees
+     * Affiche un resume des donnees dans la console.
      */
     public void afficherDonnees() {
         System.out.println("=== DONNEES DU PROBLEME ===");
@@ -108,6 +110,7 @@ public class DonneesVRP {
         }
         System.out.println("]");
 
-        System.out.println("\nMatrice des distances (" + distanceMatrix.length + "x" + distanceMatrix[0].length + ")");
+        System.out.println("\nMatrice des distances (" +
+                distanceMatrix.length + "x" + distanceMatrix[0].length + ")");
     }
 }

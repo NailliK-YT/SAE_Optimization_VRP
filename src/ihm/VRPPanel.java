@@ -8,124 +8,86 @@ import java.awt.*;
 import java.util.List;
 
 /**
- * Panneau de visualisation du graphe VRP
+ * Panneau de visualisation graphique des tournees VRP.
  */
 public class VRPPanel extends JPanel {
 
     private DonneesVRP donnees;
-    private Solution solutionAVisualiser;
+    private Solution solution;
+
+    private static final Color[] COULEURS = {
+            new Color(255, 107, 107), new Color(78, 205, 196),
+            new Color(255, 230, 109), new Color(199, 128, 232),
+            new Color(255, 159, 67), new Color(116, 185, 255),
+            new Color(162, 217, 206), new Color(255, 177, 193)
+    };
 
     public VRPPanel(DonneesVRP donnees) {
         this.donnees = donnees;
     }
 
-    public void setSolution(Solution solution) {
-        this.solutionAVisualiser = solution;
+    public void setSolution(Solution s) {
+        this.solution = s;
     }
 
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        if (solutionAVisualiser == null || donnees.getXCoords() == null)
+        if (solution == null || donnees.getXCoords() == null)
             return;
 
         Graphics2D g2 = (Graphics2D) g;
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
 
-        int width = getWidth();
-        int height = getHeight();
-        int margin = 50;
+        int w = getWidth(), h = getHeight(), m = 50;
+        double[] xc = donnees.getXCoords(), yc = donnees.getYCoords();
+        int n = donnees.getNbClients();
 
-        double[] xCoords = donnees.getXCoords();
-        double[] yCoords = donnees.getYCoords();
-        int nbClients = donnees.getNbClients();
-
-        // Trouver min/max pour mise a l'echelle
-        double minX = Double.MAX_VALUE, maxX = Double.MIN_VALUE;
-        double minY = Double.MAX_VALUE, maxY = Double.MIN_VALUE;
-
-        for (int i = 0; i < nbClients + 1; i++) {
-            if (xCoords[i] < minX)
-                minX = xCoords[i];
-            if (xCoords[i] > maxX)
-                maxX = xCoords[i];
-            if (yCoords[i] < minY)
-                minY = yCoords[i];
-            if (yCoords[i] > maxY)
-                maxY = yCoords[i];
+        // Echelle
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        for (int i = 0; i <= n; i++) {
+            minX = Math.min(minX, xc[i]);
+            maxX = Math.max(maxX, xc[i]);
+            minY = Math.min(minY, yc[i]);
+            maxY = Math.max(maxY, yc[i]);
         }
+        double sc = Math.min((w - 2.0 * m) / (maxX - minX),
+                (h - 2.0 * m) / (maxY - minY));
 
-        double scaleX = (width - 2 * margin) / (maxX - minX);
-        double scaleY = (height - 2 * margin) / (maxY - minY);
-        double scale = Math.min(scaleX, scaleY);
-
-        // Couleurs vives pour les vehicules
-        Color[] colors = {
-                new Color(255, 107, 107),
-                new Color(78, 205, 196),
-                new Color(255, 230, 109),
-                new Color(199, 128, 232),
-                new Color(255, 159, 67),
-                new Color(116, 185, 255),
-                new Color(162, 217, 206),
-                new Color(255, 177, 193)
-        };
-
-        for (int i = 0; i < solutionAVisualiser.tournees.size(); i++) {
-            List<Integer> tournee = solutionAVisualiser.tournees.get(i);
-            if (tournee.isEmpty())
+        // Routes
+        for (int i = 0; i < solution.tournees.size(); i++) {
+            List<Integer> route = solution.tournees.get(i);
+            if (route.isEmpty())
                 continue;
-
-            g2.setColor(colors[i % colors.length]);
+            g2.setColor(COULEURS[i % COULEURS.length]);
             g2.setStroke(new BasicStroke(3));
-
-            int x1 = (int) (margin + (xCoords[0] - minX) * scale);
-            int y1 = (int) (height - margin - (yCoords[0] - minY) * scale);
-
-            int first = tournee.get(0);
-            int x2 = (int) (margin + (xCoords[first] - minX) * scale);
-            int y2 = (int) (height - margin - (yCoords[first] - minY) * scale);
-            g2.drawLine(x1, y1, x2, y2);
-
-            for (int j = 0; j < tournee.size() - 1; j++) {
-                int c1 = tournee.get(j);
-                int c2 = tournee.get(j + 1);
-                x1 = (int) (margin + (xCoords[c1] - minX) * scale);
-                y1 = (int) (height - margin - (yCoords[c1] - minY) * scale);
-                x2 = (int) (margin + (xCoords[c2] - minX) * scale);
-                y2 = (int) (height - margin - (yCoords[c2] - minY) * scale);
-                g2.drawLine(x1, y1, x2, y2);
+            int px = tx(xc[0], minX, sc, m), py = ty(yc[0], minY, sc, h, m);
+            for (int c : route) {
+                int cx = tx(xc[c], minX, sc, m), cy = ty(yc[c], minY, sc, h, m);
+                g2.drawLine(px, py, cx, cy);
+                px = cx;
+                py = cy;
             }
-
-            int last = tournee.get(tournee.size() - 1);
-            x1 = (int) (margin + (xCoords[last] - minX) * scale);
-            y1 = (int) (height - margin - (yCoords[last] - minY) * scale);
-            x2 = (int) (margin + (xCoords[0] - minX) * scale);
-            y2 = (int) (height - margin - (yCoords[0] - minY) * scale);
-            g2.drawLine(x1, y1, x2, y2);
+            g2.drawLine(px, py, tx(xc[0], minX, sc, m), ty(yc[0], minY, sc, h, m));
         }
 
-        // Dessiner les clients
+        // Clients
         g2.setFont(new Font("Arial", Font.BOLD, 10));
-        for (int i = 1; i <= nbClients; i++) {
-            int x = (int) (margin + (xCoords[i] - minX) * scale);
-            int y = (int) (height - margin - (yCoords[i] - minY) * scale);
-
-            int radius = 12;
+        for (int i = 1; i <= n; i++) {
+            int x = tx(xc[i], minX, sc, m), y = ty(yc[i], minY, sc, h, m);
             g2.setColor(new Color(52, 73, 94));
-            g2.fillOval(x - radius, y - radius, radius * 2, radius * 2);
+            g2.fillOval(x - 12, y - 12, 24, 24);
             g2.setColor(Color.WHITE);
-            g2.drawOval(x - radius, y - radius, radius * 2, radius * 2);
-            String num = String.valueOf(i);
+            g2.drawOval(x - 12, y - 12, 24, 24);
+            String s = String.valueOf(i);
             FontMetrics fm = g2.getFontMetrics();
-            int textWidth = fm.stringWidth(num);
-            int textHeight = fm.getAscent();
-            g2.drawString(num, x - textWidth / 2, y + textHeight / 2 - 2);
+            g2.drawString(s, x - fm.stringWidth(s) / 2, y + fm.getAscent() / 2 - 2);
         }
 
-        // Dessiner le depot
-        int dx = (int) (margin + (xCoords[0] - minX) * scale);
-        int dy = (int) (height - margin - (yCoords[0] - minY) * scale);
+        // Depot
+        int dx = tx(xc[0], minX, sc, m), dy = ty(yc[0], minY, sc, h, m);
         g2.setColor(new Color(231, 76, 60));
         g2.fillRect(dx - 8, dy - 8, 16, 16);
         g2.setColor(Color.WHITE);
@@ -133,9 +95,17 @@ public class VRPPanel extends JPanel {
         g2.setFont(new Font("Arial", Font.BOLD, 12));
         g2.drawString("DEPOT", dx + 12, dy + 4);
 
-        // Afficher cout
+        // Cout
         g2.setFont(new Font("Arial", Font.BOLD, 14));
         g2.setColor(new Color(46, 204, 113));
-        g2.drawString("Cout: " + String.format("%.2f", solutionAVisualiser.cout), 15, 25);
+        g2.drawString("Cout: " + String.format("%.2f", solution.cout), 15, 25);
+    }
+
+    private int tx(double v, double min, double sc, int m) {
+        return (int) (m + (v - min) * sc);
+    }
+
+    private int ty(double v, double min, double sc, int h, int m) {
+        return (int) (h - m - (v - min) * sc);
     }
 }

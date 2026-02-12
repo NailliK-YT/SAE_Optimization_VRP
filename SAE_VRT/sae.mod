@@ -41,6 +41,10 @@ subject to {
     // 5. Elimination des sous-tours (Formulation MTZ) [cite: 54]
     forall(v in Vehicules, i in Cantines, j in Cantines : i != j)
         u[i] - u[j] + CapaMax * x[i][j][v] <= CapaMax - DemandesCantines[j];
+    
+    // 6. La demande de chaque client doit être inférieure ou égale à la capacité maximale
+    forall(i in Cantines)
+        DemandesCantines[i] <= CapaMax;
 }
 
 // Affichage des resultats au format demande [cite: 95, 96, 97]
