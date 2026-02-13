@@ -3,6 +3,7 @@ package controleur;
 import metier.*;
 import ihm.FenetreVRP;
 
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 
@@ -50,12 +51,22 @@ public class ControleurVRP implements FenetreVRP.EcouteurDemarrage, RecuitSimule
             fenetre.setEnCours(true);
             fenetre.afficherEtatEnCours();
 
-            long debut = System.currentTimeMillis();
-            Solution meilleure = recuit.executer();
-            long duree = System.currentTimeMillis() - debut;
+            try {
+                long debut = System.currentTimeMillis();
+                Solution meilleure = recuit.executer();
+                long duree = System.currentTimeMillis() - debut;
 
-            fenetre.setEnCours(false);
-            fenetre.afficherEtatTermine(meilleure, recuit.compterVehicules(meilleure), duree);
+                fenetre.setEnCours(false);
+                fenetre.afficherEtatTermine(meilleure, recuit.compterVehicules(meilleure), duree);
+            } catch (RuntimeException ex) {
+                fenetre.setEnCours(false);
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(null,
+                            ex.getMessage(),
+                            "Erreur", JOptionPane.ERROR_MESSAGE);
+                    fenetre.afficherEtatEnCours();
+                });
+            }
         }).start();
     }
 

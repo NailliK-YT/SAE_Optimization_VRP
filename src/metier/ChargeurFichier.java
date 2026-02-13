@@ -62,6 +62,7 @@ public class ChargeurFichier {
         int nbVehicules = (int) (1.5 * somme / donnees.getCapaciteVehicule()) + 2;
         if (nbVehicules < 5)
             nbVehicules = 10;
+
         donnees.setNbVehicules(nbVehicules);
 
         if (donnees.getNbClients() == 0 || donnees.getCapaciteVehicule() == 0)

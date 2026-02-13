@@ -107,6 +107,21 @@ public class RecuitSimule {
      */
     public Solution executer() {
 
+        // Verification : le nombre de vehicules est-il suffisant ?
+        int sommeDemandes = 0;
+        for (int d : donnees.getDemandes())
+            sommeDemandes += d;
+        int capaciteMax = donnees.getNbVehicules() * donnees.getCapaciteVehicule();
+        if (sommeDemandes > capaciteMax) {
+            throw new RuntimeException(
+                    String.format("Nombre de vehicules insuffisant ! " +
+                            "Demande totale = %d, capacite totale = %d (%d vehicules x %d). " +
+                            "Il faut au minimum %d vehicules.",
+                            sommeDemandes, capaciteMax,
+                            donnees.getNbVehicules(), donnees.getCapaciteVehicule(),
+                            (int) Math.ceil((double) sommeDemandes / donnees.getCapaciteVehicule())));
+        }
+
         // Etape 1 — Solution initiale (Plus Proche Voisin)
         Solution courante = genererSolutionInitiale();
         System.out.printf("Solution initiale: %.2f%n", courante.cout);
